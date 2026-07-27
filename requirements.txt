@@ -2,6 +2,7 @@
 winrt-Windows.Media.Control; sys_platform == "win32"
 winrt-Windows.Foundation; sys_platform == "win32"
 winrt-Windows.Foundation.Collections; sys_platform == "win32"
+pycaw; sys_platform == "win32"  # anti-fantome : detection du son local (WASAPI)
 
 # Linux : PAS de paquet pip. Installer playerctl via le gestionnaire systeme :
 #   Debian/Ubuntu : sudo apt install playerctl

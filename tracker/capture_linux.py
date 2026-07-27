@@ -30,6 +30,38 @@ async def _run(args):
     return out.decode("utf-8", "replace").strip()
 
 
+async def _pactl(args):
+    """Lance pactl (PulseAudio/PipeWire), renvoie stdout ou None."""
+    try:
+        proc = await asyncio.create_subprocess_exec(
+            "pactl", *args,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.DEVNULL,
+        )
+        out, _ = await asyncio.wait_for(proc.communicate(), timeout=2)
+    except Exception:
+        return None
+    if proc.returncode != 0:
+        return None
+    return out.decode("utf-8", "replace")
+
+
+async def _spotify_audio_active():
+    """True si Spotify alimente vraiment un sink audio local (Corked: no).
+
+    Anti-fantome Connect : si le son sort sur un autre appareil, Spotify n'a
+    pas de sink-input actif ici. Sans pactl, on ne filtre pas (comme avant).
+    """
+    out = await _pactl(["list", "sink-inputs"])
+    if out is None:
+        return True
+    for block in out.split("Sink Input #"):
+        low = block.lower()
+        if "spotify" in low and "corked: no" in low:
+            return True
+    return False
+
+
 class Capture:
     def __init__(self, allowlist):
         # allowlist ignoree : on cible directement le player MPRIS "spotify"
@@ -67,9 +99,11 @@ class Capture:
         except ValueError:
             duration = 0.0
 
+        # anti-fantome : ne "joue" que si le son sort reellement sur cet appareil
+        playing = (status == "Playing") and await _spotify_audio_active()
         return Snapshot(
             wall=time.time(), app="spotify",
             title=title, artist=artist, album=album,
-            playing=(status == "Playing"),
+            playing=playing,
             position=position, duration=duration,
         )

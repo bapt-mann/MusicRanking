@@ -45,9 +45,11 @@ class SessionTracker:
 
     def feed(self, snap):
         if snap is None or not snap.playing:
-            # pause / arret : on tolere quelques ticks (reprise possible) puis on cloture
+            # Pause/arret : on NE cloture PAS sur une breve pause (sinon un morceau
+            # en pause pres de la fin se dedouble). On ferme apres une longue
+            # inactivite seulement.
             self.idle += 1
-            if self.cur and self.idle >= 3:
+            if self.cur and self.idle * config.POLL_INTERVAL >= config.IDLE_FINALIZE_SEC:
                 self._finalize()
             return
         self.idle = 0
@@ -66,8 +68,10 @@ class SessionTracker:
         self.cur.last_wall = snap.wall
         if self.cur.duration <= 0 and snap.duration > 0:
             self.cur.duration = snap.duration
-        # detection de replay : la position retombe nettement -> nouvelle ecoute
-        if snap.position + 20 < self.cur.max_pos:
+        # detection de replay : la position revient VRAIMENT au debut (< 15 s) apres
+        # avoir bien avance -> nouvelle ecoute. Le seuil bas evite de declencher sur
+        # les sauts de position erratiques (ex. mirroring Spotify Connect).
+        if snap.position < 15 and self.cur.max_pos - snap.position > 30:
             self._finalize()
             self._open(snap)
             return

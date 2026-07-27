@@ -15,7 +15,40 @@ from winrt.windows.media.control import (
 
 from .capture_base import Snapshot
 
+try:
+    from pycaw.pycaw import AudioUtilities
+    _HAVE_PYCAW = True
+except Exception:  # pragma: no cover
+    _HAVE_PYCAW = False
+
 PLAYING = 4  # GlobalSystemMediaTransportControlsSessionPlaybackStatus.PLAYING
+
+
+def _spotify_audio_active() -> bool:
+    """True si Spotify a une session audio ACTIVE sur cet appareil (= son local).
+
+    Anti-fantome Spotify Connect : sur un appareil qui n'est qu'un miroir (le son
+    sort ailleurs), Spotify n'a pas de session audio active ici - voire pas
+    d'endpoint de rendu du tout. Sans pycaw, on ne filtre pas (comportement d'avant).
+    """
+    if not _HAVE_PYCAW:
+        return True
+    try:
+        sessions = AudioUtilities.GetAllSessions()
+    except Exception:
+        return False  # pas d'endpoint de sortie -> pas de son local
+    for s in sessions:
+        try:
+            proc = s.Process
+            if proc and "spotify" in (proc.name() or "").lower():
+                try:
+                    state = s.State
+                except Exception:
+                    state = s._ctl.GetState()
+                return state == 1  # 1 = AudioSessionStateActive
+        except Exception:
+            continue
+    return False  # aucune session audio Spotify -> pas de son local
 
 
 def _matches(app: str, allowlist) -> bool:
@@ -45,7 +78,7 @@ class Capture:
                 continue
 
             pb = session.get_playback_info()
-            playing = int(pb.playback_status) == PLAYING
+            smtc_playing = int(pb.playback_status) == PLAYING
 
             tl = session.get_timeline_properties()
             pos = tl.position.total_seconds()
@@ -54,7 +87,7 @@ class Capture:
             except Exception:
                 dur = 0.0
 
-            if playing:
+            if smtc_playing:
                 lut = tl.last_updated_time
                 if lut is not None:
                     if lut.tzinfo is None:
@@ -64,6 +97,10 @@ class Capture:
                         pos += delta
             if dur > 0:
                 pos = max(0.0, min(pos, dur))
+
+            # anti-fantome : ne compte comme "playing" que si le son sort
+            # REELLEMENT sur cet appareil (sinon c'est un miroir Connect).
+            playing = smtc_playing and _spotify_audio_active()
 
             snap = Snapshot(
                 wall=time.time(), app=app,
