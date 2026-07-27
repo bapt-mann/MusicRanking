@@ -3,11 +3,25 @@ from __future__ import annotations
 import argparse
 import asyncio
 import sys
+from datetime import datetime
 
 from . import config, db
 from .capture import make_capture
 from .ranking import render
 from .sessions import SessionTracker
+
+
+def _log(msg):
+    line = f"{datetime.now():%Y-%m-%d %H:%M:%S}  {msg}"
+    try:
+        print(line)
+    except Exception:
+        pass  # pythonw : pas de console
+    try:
+        with open(config.DATA_DIR / "tracker.log", "a", encoding="utf-8") as f:
+            f.write(line + "\n")
+    except Exception:
+        pass
 
 
 async def _track():
@@ -19,24 +33,25 @@ async def _track():
         nonlocal count
         db.insert_play(con, cfg, play)
         count += 1
-        print(f"  + {play['percent'] * 100:3.0f}%  "
-              f"{play['title_raw']} - {play['artist_raw']}")
+        _log(f"+ {play['percent'] * 100:3.0f}%  {play['title_raw']} - {play['artist_raw']}")
 
     tracker = SessionTracker(emit)
     cap = make_capture(config.APP_ALLOWLIST)
     await cap.start()
-    print(f"Tracking... (user={cfg['user_id']} device={cfg['device_id']}) "
-          f"- Ctrl+C pour arreter")
+    _log(f"Tracking demarre (user={cfg['user_id']} device={cfg['device_id']})")
     try:
         while True:
             tracker.feed(await cap.snapshot())
             await asyncio.sleep(config.POLL_INTERVAL)
     except (KeyboardInterrupt, asyncio.CancelledError):
         pass
+    except Exception as e:
+        _log(f"ERREUR: {type(e).__name__}: {e}")
+        raise
     finally:
         tracker.close()
         con.close()
-        print(f"\nArret. {count} ecoute(s) enregistree(s) cette session.")
+        _log(f"Arret. {count} ecoute(s) cette session.")
 
 
 def _rank():
