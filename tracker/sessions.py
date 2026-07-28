@@ -43,7 +43,6 @@ class SessionTracker:
     def __init__(self, on_emit):
         self.on_emit = on_emit
         self.cur: _Live | None = None
-        self.idle = 0
 
     @staticmethod
     def _ident(title: str, artist: str):
@@ -51,17 +50,11 @@ class SessionTracker:
 
     def feed(self, snap):
         if snap is None or not snap.playing:
-            # Pause/arret : on NE cloture PAS sur une breve pause (sinon un morceau
-            # en pause pres de la fin se dedouble). On ferme apres une longue
-            # inactivite seulement, et on coupe le fil de position pour ne pas
-            # compter la pause comme du temps ecoute.
-            self.idle += 1
-            if self.cur is not None:
-                self.cur.last_pos = -1.0
-                if self.idle * config.POLL_INTERVAL >= config.IDLE_FINALIZE_SEC:
-                    self._finalize()
+            # Pause/arret : on ne cloture JAMAIS sur une pause. Reprendre le meme
+            # morceau continue la meme ecoute ; le temps a l'arret n'est pas compte
+            # (la position ne bouge pas -> delta ~0 a la reprise). La cloture se fait
+            # au changement de titre, au repeat, ou a l'arret du tracker.
             return
-        self.idle = 0
 
         if self.cur is None:
             self._open(snap)

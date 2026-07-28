@@ -20,7 +20,6 @@ POLL_INTERVAL = 2.0       # secondes entre deux lectures SMTC
 MIN_PLAYS = 4             # ecoutes mini avant d'attribuer un tier a un morceau
 RATIO_CAP = 1.5           # plafond du ratio par ecoute (replays comptent, mais borne)
 MIN_TRACK_SEC = 30        # ignore les "morceaux" plus courts (pubs, parasites)
-IDLE_FINALIZE_SEC = 300   # cloture une session apres X s de pause/arret (evite les doublons)
 
 # Bareme des tiers : (label, seuil bas inclus), ordre decroissant.
 TIERS = [("S", 0.80), ("A", 0.70), ("B", 0.60), ("C", 0.50), ("D", 0.0)]
